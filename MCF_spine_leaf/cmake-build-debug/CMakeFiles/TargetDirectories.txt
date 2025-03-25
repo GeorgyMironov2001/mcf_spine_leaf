@@ -1,0 +1,3 @@
+C:/Users/MWX1248700/CLionProjects/MCF_spine_leaf/cmake-build-debug/CMakeFiles/MCF_spine_leaf.dir
+C:/Users/MWX1248700/CLionProjects/MCF_spine_leaf/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/MWX1248700/CLionProjects/MCF_spine_leaf/cmake-build-debug/CMakeFiles/rebuild_cache.dir

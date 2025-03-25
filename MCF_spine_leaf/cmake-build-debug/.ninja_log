@@ -1,0 +1,7 @@
+# ninja log v6
+24	833	7539075433348036	CMakeFiles/MCF_spine_leaf.dir/fort.c.obj	4671019aa3c62474
+13	7158	7539136520831448	CMakeFiles/MCF_spine_leaf.dir/main.cpp.obj	775fc7d10a42fc62
+7159	10265	7539136592284678	MCF_spine_leaf.exe	a15e175c547168f9
+26	655	7566570994078835	CMakeFiles/MCF_spine_leaf.dir/fort.c.obj	b141ded6af3908b5
+17	5402	7566570993989636	CMakeFiles/MCF_spine_leaf.dir/main.cpp.obj	f8d0aecaf9e3a4eb
+5410	8277	7566571047394880	MCF_spine_leaf.exe	57306c3c84870614

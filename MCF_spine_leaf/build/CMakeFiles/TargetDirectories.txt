@@ -1,3 +1,3 @@
-C:/VSCodeProjects/c_projects/MCF_spine_leaf/build/CMakeFiles/MCF_spine_leaf.dir
-C:/VSCodeProjects/c_projects/MCF_spine_leaf/build/CMakeFiles/edit_cache.dir
-C:/VSCodeProjects/c_projects/MCF_spine_leaf/build/CMakeFiles/rebuild_cache.dir
+/home/gera/MCF_spine_leaf/build/CMakeFiles/MCF_spine_leaf.dir
+/home/gera/MCF_spine_leaf/build/CMakeFiles/edit_cache.dir
+/home/gera/MCF_spine_leaf/build/CMakeFiles/rebuild_cache.dir

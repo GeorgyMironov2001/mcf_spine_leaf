@@ -1,14 +1,14 @@
 [
 {
-  "directory": "C:/VSCodeProjects/c_projects/MCF_spine_leaf/build",
-  "command": "C:\\PROGRA~2\\gcc\\mingw64\\bin\\G__~1.EXE  @CMakeFiles/MCF_spine_leaf.dir/includes_CXX.rsp -g -std=gnu++23 -o CMakeFiles\\MCF_spine_leaf.dir\\main.cpp.obj -c C:\\VSCodeProjects\\c_projects\\MCF_spine_leaf\\main.cpp",
-  "file": "C:/VSCodeProjects/c_projects/MCF_spine_leaf/main.cpp",
-  "output": "CMakeFiles/MCF_spine_leaf.dir/main.cpp.obj"
+  "directory": "/home/gera/MCF_spine_leaf/build",
+  "command": "/usr/bin/g++ -I/home/gera/MCF_spine_leaf/graaf/include -O3 -DNDEBUG -std=gnu++23 -o CMakeFiles/MCF_spine_leaf.dir/main.cpp.o -c /home/gera/MCF_spine_leaf/main.cpp",
+  "file": "/home/gera/MCF_spine_leaf/main.cpp",
+  "output": "CMakeFiles/MCF_spine_leaf.dir/main.cpp.o"
 },
 {
-  "directory": "C:/VSCodeProjects/c_projects/MCF_spine_leaf/build",
-  "command": "C:\\PROGRA~2\\gcc\\mingw64\\bin\\gcc.exe  @CMakeFiles/MCF_spine_leaf.dir/includes_C.rsp -g -o CMakeFiles\\MCF_spine_leaf.dir\\fort.c.obj -c C:\\VSCodeProjects\\c_projects\\MCF_spine_leaf\\fort.c",
-  "file": "C:/VSCodeProjects/c_projects/MCF_spine_leaf/fort.c",
-  "output": "CMakeFiles/MCF_spine_leaf.dir/fort.c.obj"
+  "directory": "/home/gera/MCF_spine_leaf/build",
+  "command": "/usr/bin/gcc -I/home/gera/MCF_spine_leaf/graaf/include -O3 -DNDEBUG -o CMakeFiles/MCF_spine_leaf.dir/fort.c.o -c /home/gera/MCF_spine_leaf/fort.c",
+  "file": "/home/gera/MCF_spine_leaf/fort.c",
+  "output": "CMakeFiles/MCF_spine_leaf.dir/fort.c.o"
 }
 ]

@@ -3,6 +3,7 @@
 #include "random"
 #include "set"
 #include "single_include/nlohmann/json.hpp"
+#include "thread_pool.hpp"
 #include "unordered_map"
 #include "vector"
 #include <cmath>
@@ -15,6 +16,7 @@
 #include <graaflib/io/dot.h>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <ranges>
 #include <set>
 #include <string>
@@ -101,7 +103,7 @@ double count_energy(vector<set<int>> &ranking, int spines, int leaves,
   int stages = (int)log2(hosts);
   vector<vector<int>> max_E(leaves);
   for (int leaf = 0; leaf < leaves; ++leaf) {
-    max_E[leaf].resize(leaves - leaf - 1, -1);
+    max_E[leaf].resize(leaves - leaf, -1);
   }
   //    vector<vector<vector<int>>> E(stages);
 
@@ -109,7 +111,7 @@ double count_energy(vector<set<int>> &ranking, int spines, int leaves,
     //        E[stage].resize(leaves);
     for (int leaf = 0; leaf < leaves; ++leaf) {
       //            max_E[leaf].resize(leaves - leaf, -1);
-      for (int next_leaf = leaf + 1; next_leaf < leaves; ++next_leaf) {
+      for (int next_leaf = leaf; next_leaf < leaves; ++next_leaf) {
         int counter = 0;
         for (auto host : ranking[leaf]) {
           int two_degree = pow(2, stage);
@@ -117,8 +119,8 @@ double count_energy(vector<set<int>> &ranking, int spines, int leaves,
             counter += 1;
           }
         }
-        max_E[leaf][next_leaf - leaf - 1] =
-            max(max_E[leaf][next_leaf - leaf - 1], counter);
+        max_E[leaf][next_leaf - leaf] =
+            max(max_E[leaf][next_leaf - leaf], counter);
       }
     }
   }
@@ -128,12 +130,12 @@ double count_energy(vector<set<int>> &ranking, int spines, int leaves,
       continue;
     double max_degree = 0;
     for (int other_leaf = 0; other_leaf < leaves; ++other_leaf) {
-      if (other_leaf == leaf)
-        continue;
+      // if (other_leaf == leaf)
+      //   continue;
       int leaf_less = leaf, leaf_more = other_leaf;
       if (leaf_less > leaf_more)
         swap(leaf_less, leaf_more);
-      max_degree += max_E[leaf_less][leaf_more - leaf_less - 1];
+      max_degree += max_E[leaf_less][leaf_more - leaf_less];
     }
     res_energy += (1 / (double)ranking[leaf].size()) *
                   max((double)0, max_degree - (double)ranking[leaf].size());
@@ -572,60 +574,107 @@ auto read_test(int tasks, int leaves, int spines, string alpha) {
   return test_rankings;
 }
 
-auto run_tests_1(int tasks, int leaves, int spines, int max_iter = 100) {
-  double (*func)(int) = [](int iter) { return 100 / double(iter + 1); };
+auto run_tests_1(int tasks, int leaves, int spines, int max_iter = 10000,
+                 int thread_num = 1) {
+  double (*func)(int) = [](int iter) { return 10000 / double(iter + 1); };
   map<string, map<string, int>> statistic;
   string test_name_dir = format("{}_{}_{}", tasks, leaves, spines);
   path cwd = current_path().parent_path();
   cwd.append("tests");
   cwd.append(test_name_dir);
+
+  BS::thread_pool pool(thread_num);
+  mutex m;
   for (auto alpha_dir : filesystem::directory_iterator(cwd)) {
     string alpha = alpha_dir.path().filename().string();
     statistic[alpha] = {{"passed_tests", 0}, {"failed_tests", 0}};
     auto tests = read_test(tasks, leaves, spines, alpha);
-    for (auto &ranking : tests) {
-      switch (test1(spines, leaves, tasks, func, ranking, max_iter)) {
-      case 0:
-        statistic[alpha]["failed_tests"] += 1;
-        break;
-      case 1:
-        statistic[alpha]["passed_tests"] += 1;
-        break;
-      }
+    for (auto ranking : tests) {
+      pool.submit(
+          [&](auto test_tanking, string test_alpha) {
+            auto res =
+                test1(spines, leaves, tasks, func, test_tanking, max_iter);
+            m.lock();
+            switch (res) {
+            case 0:
+              statistic[test_alpha]["failed_tests"] += 1;
+              break;
+            case 1:
+              statistic[test_alpha]["passed_tests"] += 1;
+              break;
+            }
+            m.unlock();
+          },
+          ranking, alpha);
+      // switch (test1(spines, leaves, tasks, func, ranking, max_iter)) {
+      // case 0:
+      //   statistic[alpha]["failed_tests"] += 1;
+      //   break;
+      // case 1:
+      //   statistic[alpha]["passed_tests"] += 1;
+      //   break;
+      // }
     }
   }
+  pool.wait_for_tasks();
   return statistic;
 }
 
-auto run_tests_2(int tasks, int leaves, int spines, int max_iter = 100) {
+auto run_tests_2(int tasks, int leaves, int spines, int max_iter = 10000,
+                 int thread_num = 1) {
 
-  double (*func)(int) = [](int iter) { return 100 / double(iter + 1); };
+  double (*func)(int) = [](int iter) { return 10000 / double(iter + 1); };
 
   map<string, map<string, int>> statistic;
   string test_name_dir = format("{}_{}_{}", tasks, leaves, spines);
   path cwd = current_path().parent_path();
   cwd.append("tests");
   cwd.append(test_name_dir);
+
+  BS::thread_pool pool(thread_num);
+  mutex m;
   for (auto alpha_dir : filesystem::directory_iterator(cwd)) {
     string alpha = alpha_dir.path().filename().string();
     statistic[alpha] = {
         {"passed_tests", 0}, {"failed_tests", 0}, {"not_found_coloring", 0}};
+
     auto tests = read_test(tasks, leaves, spines, alpha);
-    for (auto &ranking : tests) {
-      switch (test2(spines, leaves, tasks, func, ranking, max_iter)) {
-      case 0:
-        statistic[alpha]["failed_tests"] += 1;
-        break;
-      case 1:
-        statistic[alpha]["passed_tests"] += 1;
-        break;
-      case 2:
-        statistic[alpha]["not_found_coloring"] += 1;
-        statistic[alpha]["failed_tests"] += 1;
-        break;
-      }
+    for (auto ranking : tests) {
+      pool.submit(
+          [&](auto test_ranking, string test_alpha) {
+            auto res =
+                test2(spines, leaves, tasks, func, test_ranking, max_iter);
+            m.lock();
+            switch (res) {
+            case 0:
+              statistic[test_alpha]["failed_tests"] += 1;
+              break;
+            case 1:
+              statistic[test_alpha]["passed_tests"] += 1;
+              break;
+            case 2:
+              statistic[test_alpha]["not_found_coloring"] += 1;
+              statistic[test_alpha]["failed_tests"] += 1;
+              break;
+            }
+            m.unlock();
+          },
+          ranking, alpha);
+      // switch (test2(spines, leaves, tasks, func, ranking, max_iter)) {
+      // case 0:
+      //   statistic[alpha]["failed_tests"] += 1;
+      //   break;
+      // case 1:
+      //   statistic[alpha]["passed_tests"] += 1;
+      //   break;
+      // case 2:
+      //   statistic[alpha]["not_found_coloring"] += 1;
+      //   statistic[alpha]["failed_tests"] += 1;
+      //   break;
+      // }
     }
   }
+  pool.wait_for_tasks();
   return statistic;
 }
 
@@ -633,7 +682,7 @@ template <ranges::range R> constexpr auto to_vector(R &&r) {
   using elem_t = std::decay_t<ranges::range_value_t<R>>;
   return std::vector<elem_t>{r.begin(), r.end()};
 }
-void run_all_tests(string stats_filename, auto &resolve_func) {
+void run_all_tests(string stats_filename, auto &resolve_func, int thread_num) {
   map<string, map<string, map<string, int>>> all_stats;
   path tests_dir = current_path().parent_path();
   tests_dir.append("tests");
@@ -647,7 +696,7 @@ void run_all_tests(string stats_filename, auto &resolve_func) {
     leaves = stoi(asVector[1]);
     spines = stoi(asVector[2]);
     all_stats[format("({}, {}, {})", tasks, leaves, spines)] =
-        resolve_func(tasks, leaves, spines, 100);
+        resolve_func(tasks, leaves, spines, 10000, thread_num);
   }
 
   json stat_json(all_stats);
@@ -657,16 +706,22 @@ void run_all_tests(string stats_filename, auto &resolve_func) {
   file << stat_json;
   file.close();
 }
-int main() {
-  cout << "Pizdec";
 
-  thread t1([]() { run_all_tests("new_scenario1.json", run_tests_1); });
-  // thread t2([]() { run_all_tests("new_scenario2.json", run_tests_2); });
+auto debug_test2(int tasks, int leaves, int spines, string alpha) {
+  auto tests = read_test(tasks, leaves, spines, alpha);
+  double (*func)(int) = [](int iter) { return 100 / double(iter + 1); };
+  auto ranking = tests[3];
+  return test2(spines, leaves, tasks, func, ranking, 100);
+}
+
+int main() {
+  run_all_tests("iteration_10000_1.json", run_tests_1, 60);
+  run_all_tests("iteration_10000_2.json", run_tests_2, 60);
+  // cout << debug_test2(3, 5, 10, "1.0");
+  // thread t1([]() { run_all_tests("iteration_10000_1.json", run_tests_1); });
+  // thread t2([]() { run_all_tests("iteration_10000_2.json", run_tests_2); });
   // t1.join();
   // t2.join();
-
-
-  
   // run_all_tests("new_scenario1.json", run_tests_1);
   // run_all_tests("new_scenario2.json", run_tests_2);
   // int tasks = 3, leaves = 5, spines = 10, max_iter = 100;

@@ -1,0 +1,430 @@
+{
+    "(10, 20, 30)": {
+        "-0.1": {
+            "failed_tests": 2737,
+            "not_found_coloring": 0,
+            "passed_tests": 7263
+        },
+        "-0.2": {
+            "failed_tests": 2229,
+            "not_found_coloring": 0,
+            "passed_tests": 7771
+        },
+        "-0.3": {
+            "failed_tests": 1778,
+            "not_found_coloring": 0,
+            "passed_tests": 8222
+        },
+        "-0.4": {
+            "failed_tests": 1468,
+            "not_found_coloring": 0,
+            "passed_tests": 8532
+        },
+        "-0.5": {
+            "failed_tests": 1252,
+            "not_found_coloring": 0,
+            "passed_tests": 8748
+        },
+        "-0.6": {
+            "failed_tests": 1021,
+            "not_found_coloring": 0,
+            "passed_tests": 8979
+        },
+        "-0.7": {
+            "failed_tests": 854,
+            "not_found_coloring": 0,
+            "passed_tests": 9146
+        },
+        "-0.8": {
+            "failed_tests": 660,
+            "not_found_coloring": 0,
+            "passed_tests": 9340
+        },
+        "-0.9": {
+            "failed_tests": 563,
+            "not_found_coloring": 0,
+            "passed_tests": 9437
+        },
+        "-1.0": {
+            "failed_tests": 483,
+            "not_found_coloring": 0,
+            "passed_tests": 9517
+        },
+        "0.0": {
+            "failed_tests": 3158,
+            "not_found_coloring": 0,
+            "passed_tests": 6842
+        },
+        "0.1": {
+            "failed_tests": 3953,
+            "not_found_coloring": 0,
+            "passed_tests": 6047
+        },
+        "0.2": {
+            "failed_tests": 3967,
+            "not_found_coloring": 61,
+            "passed_tests": 3679
+        },
+        "0.3": {
+            "failed_tests": 1049,
+            "not_found_coloring": 86,
+            "passed_tests": 460
+        },
+        "0.4": {
+            "failed_tests": 576,
+            "not_found_coloring": 97,
+            "passed_tests": 131
+        },
+        "0.5": {
+            "failed_tests": 303,
+            "not_found_coloring": 84,
+            "passed_tests": 56
+        },
+        "0.6": {
+            "failed_tests": 174,
+            "not_found_coloring": 46,
+            "passed_tests": 28
+        },
+        "0.7": {
+            "failed_tests": 158,
+            "not_found_coloring": 43,
+            "passed_tests": 9
+        },
+        "0.8": {
+            "failed_tests": 389,
+            "not_found_coloring": 112,
+            "passed_tests": 30
+        },
+        "0.9": {
+            "failed_tests": 280,
+            "not_found_coloring": 84,
+            "passed_tests": 17
+        },
+        "1.0": {
+            "failed_tests": 137,
+            "not_found_coloring": 43,
+            "passed_tests": 7
+        }
+    },
+    "(3, 10, 20)": {
+        "-0.1": {
+            "failed_tests": 1244,
+            "not_found_coloring": 0,
+            "passed_tests": 8724
+        },
+        "-0.2": {
+            "failed_tests": 1109,
+            "not_found_coloring": 0,
+            "passed_tests": 8854
+        },
+        "-0.3": {
+            "failed_tests": 833,
+            "not_found_coloring": 0,
+            "passed_tests": 9117
+        },
+        "-0.4": {
+            "failed_tests": 657,
+            "not_found_coloring": 0,
+            "passed_tests": 9287
+        },
+        "-0.5": {
+            "failed_tests": 519,
+            "not_found_coloring": 0,
+            "passed_tests": 9423
+        },
+        "-0.6": {
+            "failed_tests": 412,
+            "not_found_coloring": 0,
+            "passed_tests": 9536
+        },
+        "-0.7": {
+            "failed_tests": 359,
+            "not_found_coloring": 0,
+            "passed_tests": 9560
+        },
+        "-0.8": {
+            "failed_tests": 258,
+            "not_found_coloring": 0,
+            "passed_tests": 9659
+        },
+        "-0.9": {
+            "failed_tests": 230,
+            "not_found_coloring": 0,
+            "passed_tests": 9671
+        },
+        "-1.0": {
+            "failed_tests": 170,
+            "not_found_coloring": 0,
+            "passed_tests": 9709
+        },
+        "0.0": {
+            "failed_tests": 1534,
+            "not_found_coloring": 0,
+            "passed_tests": 8430
+        },
+        "0.1": {
+            "failed_tests": 1798,
+            "not_found_coloring": 0,
+            "passed_tests": 8168
+        },
+        "0.2": {
+            "failed_tests": 2211,
+            "not_found_coloring": 14,
+            "passed_tests": 7745
+        },
+        "0.3": {
+            "failed_tests": 1952,
+            "not_found_coloring": 45,
+            "passed_tests": 4620
+        },
+        "0.4": {
+            "failed_tests": 1352,
+            "not_found_coloring": 67,
+            "passed_tests": 2064
+        },
+        "0.5": {
+            "failed_tests": 905,
+            "not_found_coloring": 69,
+            "passed_tests": 1047
+        },
+        "0.6": {
+            "failed_tests": 668,
+            "not_found_coloring": 70,
+            "passed_tests": 614
+        },
+        "0.7": {
+            "failed_tests": 602,
+            "not_found_coloring": 81,
+            "passed_tests": 564
+        },
+        "0.8": {
+            "failed_tests": 1161,
+            "not_found_coloring": 176,
+            "passed_tests": 1002
+        },
+        "0.9": {
+            "failed_tests": 799,
+            "not_found_coloring": 159,
+            "passed_tests": 642
+        },
+        "1.0": {
+            "failed_tests": 741,
+            "not_found_coloring": 119,
+            "passed_tests": 626
+        }
+    },
+    "(3, 5, 10)": {
+        "-0.1": {
+            "failed_tests": 2706,
+            "not_found_coloring": 30,
+            "passed_tests": 6770
+        },
+        "-0.2": {
+            "failed_tests": 2360,
+            "not_found_coloring": 15,
+            "passed_tests": 6959
+        },
+        "-0.3": {
+            "failed_tests": 2172,
+            "not_found_coloring": 10,
+            "passed_tests": 6919
+        },
+        "-0.4": {
+            "failed_tests": 1736,
+            "not_found_coloring": 4,
+            "passed_tests": 7089
+        },
+        "-0.5": {
+            "failed_tests": 1493,
+            "not_found_coloring": 4,
+            "passed_tests": 7099
+        },
+        "-0.6": {
+            "failed_tests": 1182,
+            "not_found_coloring": 1,
+            "passed_tests": 7087
+        },
+        "-0.7": {
+            "failed_tests": 952,
+            "not_found_coloring": 1,
+            "passed_tests": 7010
+        },
+        "-0.8": {
+            "failed_tests": 694,
+            "not_found_coloring": 0,
+            "passed_tests": 6936
+        },
+        "-0.9": {
+            "failed_tests": 585,
+            "not_found_coloring": 0,
+            "passed_tests": 6853
+        },
+        "-1.0": {
+            "failed_tests": 432,
+            "not_found_coloring": 0,
+            "passed_tests": 6589
+        },
+        "0.0": {
+            "failed_tests": 2683,
+            "not_found_coloring": 70,
+            "passed_tests": 6089
+        },
+        "0.1": {
+            "failed_tests": 2692,
+            "not_found_coloring": 179,
+            "passed_tests": 5715
+        },
+        "0.2": {
+            "failed_tests": 988,
+            "not_found_coloring": 124,
+            "passed_tests": 2128
+        },
+        "0.3": {
+            "failed_tests": 244,
+            "not_found_coloring": 46,
+            "passed_tests": 491
+        },
+        "0.4": {
+            "failed_tests": 127,
+            "not_found_coloring": 33,
+            "passed_tests": 259
+        },
+        "0.5": {
+            "failed_tests": 118,
+            "not_found_coloring": 47,
+            "passed_tests": 226
+        },
+        "0.6": {
+            "failed_tests": 68,
+            "not_found_coloring": 22,
+            "passed_tests": 137
+        },
+        "0.7": {
+            "failed_tests": 65,
+            "not_found_coloring": 24,
+            "passed_tests": 133
+        },
+        "0.8": {
+            "failed_tests": 116,
+            "not_found_coloring": 59,
+            "passed_tests": 235
+        },
+        "0.9": {
+            "failed_tests": 54,
+            "not_found_coloring": 23,
+            "passed_tests": 134
+        },
+        "1.0": {
+            "failed_tests": 102,
+            "not_found_coloring": 48,
+            "passed_tests": 224
+        }
+    },
+    "(5, 10, 25)": {
+        "-0.1": {
+            "failed_tests": 1933,
+            "not_found_coloring": 0,
+            "passed_tests": 8067
+        },
+        "-0.2": {
+            "failed_tests": 1552,
+            "not_found_coloring": 0,
+            "passed_tests": 8448
+        },
+        "-0.3": {
+            "failed_tests": 1198,
+            "not_found_coloring": 0,
+            "passed_tests": 8802
+        },
+        "-0.4": {
+            "failed_tests": 944,
+            "not_found_coloring": 0,
+            "passed_tests": 9056
+        },
+        "-0.5": {
+            "failed_tests": 719,
+            "not_found_coloring": 0,
+            "passed_tests": 9281
+        },
+        "-0.6": {
+            "failed_tests": 561,
+            "not_found_coloring": 0,
+            "passed_tests": 9439
+        },
+        "-0.7": {
+            "failed_tests": 456,
+            "not_found_coloring": 0,
+            "passed_tests": 9544
+        },
+        "-0.8": {
+            "failed_tests": 329,
+            "not_found_coloring": 0,
+            "passed_tests": 9671
+        },
+        "-0.9": {
+            "failed_tests": 279,
+            "not_found_coloring": 0,
+            "passed_tests": 9721
+        },
+        "-1.0": {
+            "failed_tests": 192,
+            "not_found_coloring": 0,
+            "passed_tests": 9808
+        },
+        "0.0": {
+            "failed_tests": 2398,
+            "not_found_coloring": 0,
+            "passed_tests": 7602
+        },
+        "0.1": {
+            "failed_tests": 2901,
+            "not_found_coloring": 3,
+            "passed_tests": 7099
+        },
+        "0.2": {
+            "failed_tests": 1944,
+            "not_found_coloring": 54,
+            "passed_tests": 2951
+        },
+        "0.3": {
+            "failed_tests": 735,
+            "not_found_coloring": 52,
+            "passed_tests": 714
+        },
+        "0.4": {
+            "failed_tests": 484,
+            "not_found_coloring": 54,
+            "passed_tests": 318
+        },
+        "0.5": {
+            "failed_tests": 421,
+            "not_found_coloring": 73,
+            "passed_tests": 249
+        },
+        "0.6": {
+            "failed_tests": 186,
+            "not_found_coloring": 31,
+            "passed_tests": 95
+        },
+        "0.7": {
+            "failed_tests": 120,
+            "not_found_coloring": 18,
+            "passed_tests": 87
+        },
+        "0.8": {
+            "failed_tests": 200,
+            "not_found_coloring": 34,
+            "passed_tests": 95
+        },
+        "0.9": {
+            "failed_tests": 238,
+            "not_found_coloring": 44,
+            "passed_tests": 99
+        },
+        "1.0": {
+            "failed_tests": 290,
+            "not_found_coloring": 55,
+            "passed_tests": 167
+        }
+    }
+}
