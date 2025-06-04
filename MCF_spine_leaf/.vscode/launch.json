@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "./build/MCF_spine_leaf",
+            "program": "./build/MCF_spine_leaf.exe",
             "args": [],
             "cwd": "./build"
         }

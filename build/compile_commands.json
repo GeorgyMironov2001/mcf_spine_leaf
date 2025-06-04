@@ -1,0 +1,14 @@
+[
+{
+  "directory": "C:/Users/MWX1248700/VScodeProjects/mcf_spine_leaf/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/MCF_spine_leaf.dir/includes_CXX.rsp -g -std=gnu++23 -o CMakeFiles\\MCF_spine_leaf.dir\\main.cpp.obj -c C:\\Users\\MWX1248700\\VScodeProjects\\mcf_spine_leaf\\MCF_spine_leaf_old\\main.cpp",
+  "file": "C:/Users/MWX1248700/VScodeProjects/mcf_spine_leaf/MCF_spine_leaf_old/main.cpp",
+  "output": "CMakeFiles/MCF_spine_leaf.dir/main.cpp.obj"
+},
+{
+  "directory": "C:/Users/MWX1248700/VScodeProjects/mcf_spine_leaf/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\gcc.exe  @CMakeFiles/MCF_spine_leaf.dir/includes_C.rsp -g -o CMakeFiles\\MCF_spine_leaf.dir\\fort.c.obj -c C:\\Users\\MWX1248700\\VScodeProjects\\mcf_spine_leaf\\MCF_spine_leaf_old\\fort.c",
+  "file": "C:/Users/MWX1248700/VScodeProjects/mcf_spine_leaf/MCF_spine_leaf_old/fort.c",
+  "output": "CMakeFiles/MCF_spine_leaf.dir/fort.c.obj"
+}
+]

@@ -7,6 +7,7 @@
 #include "unordered_map"
 #include "vector"
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -15,6 +16,7 @@
 #include <graaflib/graph.h>
 #include <graaflib/io/dot.h>
 #include <iostream>
+#include <limits.h>
 #include <map>
 #include <mutex>
 #include <ranges>
@@ -22,6 +24,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+
 const int seed = 42;
 std::mt19937 rng(seed);
 using namespace std;
@@ -97,8 +100,8 @@ vector<set<int>> get_initial_ranking(int spines, int leaves, int hosts,
   return start_ranking;
 }
 
-double count_energy(vector<set<int>> &ranking, int spines, int leaves,
-                    int hosts) {
+double count_energy_1(vector<set<int>> &ranking, int spines, int leaves,
+                      int hosts) {
   double res_energy = 0;
   int stages = (int)log2(hosts);
   vector<vector<int>> max_E(leaves);
@@ -130,8 +133,9 @@ double count_energy(vector<set<int>> &ranking, int spines, int leaves,
       continue;
     double max_degree = 0;
     for (int other_leaf = 0; other_leaf < leaves; ++other_leaf) {
-      // if (other_leaf == leaf)
-      //   continue;
+      if (other_leaf == leaf) {
+        continue;
+      }
       int leaf_less = leaf, leaf_more = other_leaf;
       if (leaf_less > leaf_more)
         swap(leaf_less, leaf_more);
@@ -184,7 +188,7 @@ bool task_is_congestionless_1(int spines, int leaves, int hosts, int task_id,
   //    std::mt19937 rng(seed);
   // auto ranking = get_initial_ranking(spines, leaves, hosts, alpha);
   // write_ranking(ranking);
-  double prev_energy = count_energy(ranking, spines, leaves, hosts);
+  double prev_energy = count_energy_1(ranking, spines, leaves, hosts);
   uniform_real_distribution<double> distribution(0.0, 1.0);
   for (int iter = 0; iter < max_iter; ++iter) {
     // cout << '\n';
@@ -196,7 +200,7 @@ bool task_is_congestionless_1(int spines, int leaves, int hosts, int task_id,
     }
     double T = schedule_temp(iter);
     auto new_ranking = get_swap_neighbor(ranking, task_id);
-    double new_energy = count_energy(new_ranking, spines, leaves, hosts);
+    double new_energy = count_energy_1(new_ranking, spines, leaves, hosts);
     if (new_energy < prev_energy) {
       ranking = std::move(new_ranking);
       prev_energy = new_energy;
@@ -212,8 +216,8 @@ bool task_is_congestionless_1(int spines, int leaves, int hosts, int task_id,
   return prev_energy == 0;
 }
 
-auto test1(int spines, int leaves, int tasks, double (*schedule_temp)(int),
-           vector<vector<set<int>>> &ranking, int max_iter = 100) {
+int test1(int spines, int leaves, int tasks, double (*schedule_temp)(int),
+          vector<vector<set<int>>> &ranking, int max_iter = 100) {
   // write_task_ranking(ranking);
   for (int task_id = 0; task_id < tasks; ++task_id) {
     int hosts = 0;
@@ -222,10 +226,10 @@ auto test1(int spines, int leaves, int tasks, double (*schedule_temp)(int),
     }
     if (!task_is_congestionless_1(spines, leaves, hosts, task_id, schedule_temp,
                                   ranking[task_id], max_iter)) {
-      return false;
+      return 0;
     }
   }
-  return true;
+  return 1;
 }
 
 int split_num(int N, int k) {
@@ -355,32 +359,91 @@ double kuhn(vector<multiset<int>> &Graph, int need_cover, int kuhn_times) {
   return add_energy;
 }
 
+// double count_stage_energy(vector<set<int>> &task_ranking,
+//                           vector<int> &host_to_leaf, int stage) {
+//   vector<multiset<int>> Graph(task_ranking.size(), multiset<int>());
+//   double stage_energy = 0;
+//   auto prepare_stage = prepare_stage_edges(task_ranking, host_to_leaf,
+//   stage); auto &stage_edges = get<0>(prepare_stage); auto &leaves_of_size =
+//   get<1>(prepare_stage); int need_cover = 0; auto kv =
+//   std::views::keys(stage_edges); vector<int> phases{kv.begin(), kv.end()};
+//   sort(phases.begin(), phases.end());
+//   for (int phase_id = (int)phases.size() - 1; phase_id >= 0; --phase_id) {
+//     int phase_size = phases[phase_id];
+//     auto &edges = stage_edges[phase_size];
+//     need_cover += leaves_of_size[phase_size];
+//     for (auto [from, to] : edges) {
+//       Graph[from].insert(to);
+//     }
+//     int kuhn_times =
+//         phase_id > 0 ? phase_size - phases[phase_id - 1] : phase_size;
+//     stage_energy += kuhn(Graph, need_cover, kuhn_times);
+//   }
+//   return stage_energy;
+// }
+
+void kuhn_use_tor_switch(vector<multiset<int>> &Graph, int kuhn_times) {
+  double add_energy = 0;
+  vector<bool> used(Graph.size(), false);
+  for (int _ = 0; _ < kuhn_times; ++_) {
+
+    vector<int> matching(Graph.size(), -1);
+    for (int i = 0; i < Graph.size(); ++i) {
+      used.assign(Graph.size(), false);
+      try_kuhn(Graph, matching, used, i);
+    }
+
+    int matching_size = 0;
+    for (int from : matching) {
+      if (from != -1)
+        matching_size++;
+    }
+    // add_energy += need_cover - matching_size;
+
+    remove_matching_from_graph(Graph, matching);
+  }
+  // return add_energy;
+}
+
 double count_stage_energy(vector<set<int>> &task_ranking,
-                          vector<int> &host_to_leaf, int stage) {
+                          vector<int> &host_to_leaf, int stage,
+                          bool interleaf_communication = true) {
   vector<multiset<int>> Graph(task_ranking.size(), multiset<int>());
   double stage_energy = 0;
   auto prepare_stage = prepare_stage_edges(task_ranking, host_to_leaf, stage);
   auto &stage_edges = get<0>(prepare_stage);
   auto &leaves_of_size = get<1>(prepare_stage);
-  int need_cover = 0;
+  // int need_cover = 0;
   auto kv = std::views::keys(stage_edges);
   vector<int> phases{kv.begin(), kv.end()};
   sort(phases.begin(), phases.end());
   for (int phase_id = (int)phases.size() - 1; phase_id >= 0; --phase_id) {
     int phase_size = phases[phase_id];
     auto &edges = stage_edges[phase_size];
-    need_cover += leaves_of_size[phase_size];
+    // need_cover += leaves_of_size[phase_size];
     for (auto [from, to] : edges) {
-      Graph[from].insert(to);
+
+      if ((from != to) || (!interleaf_communication)) {
+        Graph[from].insert(to);
+      }
     }
     int kuhn_times =
         phase_id > 0 ? phase_size - phases[phase_id - 1] : phase_size;
-    stage_energy += kuhn(Graph, need_cover, kuhn_times);
+    kuhn_use_tor_switch(Graph, kuhn_times);
   }
-  return stage_energy;
+
+  int edges_number = 0;
+  for (auto &node : Graph) {
+    edges_number += node.size();
+  }
+  // assert(stage_energy == edges_number);
+  return edges_number;
 }
 
-double count_energy(vector<set<int>> &task_ranking) {
+double count_energy(vector<set<int>> &task_ranking,
+                    double (*count_stage_energy_func)(vector<set<int>> &,
+                                                      vector<int> &, int,
+                                                      bool)) {
   double energy = 0;
   vector<int> host_to_leaf(1);
   //    set<int> leaf_sizes;
@@ -403,7 +466,7 @@ double count_energy(vector<set<int>> &task_ranking) {
     throw std::runtime_error("number of hosts on task is not a power of two");
   }
   for (int stage = 0; stage < stages; ++stage) {
-    energy += count_stage_energy(task_ranking, host_to_leaf, stage);
+    energy += count_stage_energy_func(task_ranking, host_to_leaf, stage, true);
   }
   return energy;
 }
@@ -411,14 +474,14 @@ double count_energy(vector<set<int>> &task_ranking) {
 bool check_congestionless_ranking(vector<set<int>> &task_ranking, int task_id,
                                   double (*schedule_temp)(int),
                                   int max_iter = 100) {
-  double prev_energy = count_energy(task_ranking);
+  double prev_energy = count_energy(task_ranking, count_stage_energy);
   uniform_real_distribution<double> distribution(0.0, 1.0);
   for (int iter = 0; iter < max_iter; ++iter) {
     if (prev_energy == 0)
       break;
     double T = schedule_temp(iter);
     auto new_ranking = get_swap_neighbor(task_ranking, task_id);
-    double new_energy = count_energy(new_ranking);
+    double new_energy = count_energy(new_ranking, count_stage_energy);
     if (new_energy < prev_energy) {
       task_ranking = std::move(new_ranking);
       prev_energy = new_energy;
@@ -522,10 +585,10 @@ int test2(int spines, int leaves, int tasks, double (*schedule_temp)(int),
   // auto ranking =
   //     get_network_assignment(spines, leaves, max_two_power_on_task, tasks);
   // write_task_ranking(ranking);
-  if (!hypergraph_edge_coloring_exists(ranking, spines)) {
-    // cout << "can`t find proper coloring\n";
-    return 2;
-  }
+  // if (!hypergraph_edge_coloring_exists(ranking, spines)) {
+  //   // cout << "can`t find proper coloring\n";
+  //   return 2;
+  // }
   for (int task = 0; task < tasks; ++task) {
     if (!check_congestionless_ranking(ranking[task], task, schedule_temp,
                                       max_iter)) {
@@ -558,12 +621,13 @@ auto read_test(int tasks, int leaves, int spines, string alpha) {
   vector<vector<vector<set<int>>>> test_rankings;
   string test_name_dir = format("{}_{}_{}", tasks, leaves, spines);
   path test_file = current_path().parent_path();
-  test_file.append("tests");
+  test_file.append("new_tests");
   test_file.append(test_name_dir);
   test_file.append(alpha);
 
   for (auto test_name : filesystem::directory_iterator{test_file}) {
     ifstream f(test_name.path());
+    // cout << test_name.path() << '\n';
     json data = json::parse(f);
     for (auto &test : data) {
       test_rankings.push_back(get_ranking_from_json(tasks, leaves, test));
@@ -685,7 +749,7 @@ template <ranges::range R> constexpr auto to_vector(R &&r) {
 void run_all_tests(string stats_filename, auto &resolve_func, int thread_num) {
   map<string, map<string, map<string, int>>> all_stats;
   path tests_dir = current_path().parent_path();
-  tests_dir.append("tests");
+  tests_dir.append("new_tests");
   int tasks = 0, leaves = 0, spines = 0;
   for (auto tls : filesystem::directory_iterator(tests_dir)) {
     auto parts = tls.path().filename().string() | views::split('_') |
@@ -709,88 +773,297 @@ void run_all_tests(string stats_filename, auto &resolve_func, int thread_num) {
 
 auto debug_test2(int tasks, int leaves, int spines, string alpha) {
   auto tests = read_test(tasks, leaves, spines, alpha);
-  double (*func)(int) = [](int iter) { return 100 / double(iter + 1); };
-  auto ranking = tests[3];
-  return test2(spines, leaves, tasks, func, ranking, 100);
+  tasks = 1;
+  double (*func)(int) = [](int iter) { return 10000 / double(iter + 1); };
+  BS::thread_pool pool(58);
+  mutex m;
+
+  // auto ranking = tests[3];
+  vector<int> results(tests.size());
+  for (int i = 0; i < tests.size(); ++i) {
+    auto ranking = tests[i];
+    pool.submit(
+        [&](auto test_ranking, int pos) {
+          auto res = test2(spines, leaves, tasks, func, test_ranking, 10000);
+          m.lock();
+          results[pos] = res;
+          m.unlock();
+        },
+        ranking, i);
+    // results.push_back(test2(spines, leaves, tasks, func, ranking, 10000));
+  }
+  pool.wait_for_tasks();
+  return results;
+}
+
+auto read_colored_test(int tasks, int leaves, int spines, string alpha,
+                       string test_dir_name = "multi_tasks_tests") {
+  vector<vector<vector<set<int>>>> test_rankings;
+  vector<bool> test_colorings;
+  string test_name_dir = format("{}_{}_{}", tasks, leaves, spines);
+  path test_file = current_path().parent_path();
+  test_file.append(test_dir_name);
+  test_file.append(test_name_dir);
+  test_file.append(alpha);
+
+  int count = std::distance(std::filesystem::directory_iterator(test_file),
+                            std::filesystem::directory_iterator{});
+  count /= 2;
+  // cout << count;
+  for (int num = 0; num < count; ++num) {
+    auto current_test_file = test_file;
+    current_test_file.append(format("test_{}.json", num));
+    ifstream f(current_test_file);
+    json data = json::parse(f);
+    for (auto &test : data) {
+      test_rankings.push_back(get_ranking_from_json(tasks, leaves, test));
+    }
+    f.close();
+    auto current_color_file = test_file;
+    current_color_file.append(format("color_{}.json", num));
+    ifstream f2(current_color_file);
+    json color_data = json::parse(f2);
+    for (auto &color : color_data) {
+      bool res_color = color.get<bool>();
+      test_colorings.push_back(res_color);
+    }
+    f2.close();
+  }
+
+  return make_tuple(test_rankings, test_colorings);
+}
+auto colored_test2(int tasks, int leaves, int spines, string alpha,
+                   string test_dir_name) {
+  auto [tests, colorings] =
+      read_colored_test(tasks, leaves, spines, alpha, test_dir_name);
+  double (*func)(int) = [](int iter) { return 10000 / double(iter + 1); };
+  BS::thread_pool pool(40);
+  mutex m;
+
+  // auto ranking = tests[3];
+  vector<int> results(tests.size());
+  for (int i = 0; i < tests.size(); ++i) {
+    if (!colorings[i]) {
+      results[i] = 0;
+      continue;
+    }
+    auto ranking = tests[i];
+    pool.submit(
+        [&](auto test_ranking, int pos) {
+          auto res = test2(spines, leaves, tasks, func, test_ranking, 10000);
+          m.lock();
+          results[pos] = res;
+          m.unlock();
+        },
+        ranking, i);
+    // results.push_back(test2(spines, leaves, tasks, func, ranking, 10000));
+  }
+  pool.wait_for_tasks();
+  return results;
+}
+
+auto colored_test1(int tasks, int leaves, int spines, string alpha,
+                   string test_dir_name) {
+  auto [tests, colorings] =
+      read_colored_test(tasks, leaves, spines, alpha, test_dir_name);
+  double (*func)(int) = [](int iter) { return 10000 / double(iter + 1); };
+  BS::thread_pool pool(60);
+  mutex m;
+
+  // auto ranking = tests[3];
+  vector<int> results(tests.size());
+  for (int i = 0; i < tests.size(); ++i) {
+    auto ranking = tests[i];
+    pool.submit(
+        [&](auto test_ranking, int pos) {
+          auto res = test1(spines, leaves, tasks, func, test_ranking, 10000);
+          m.lock();
+          results[pos] = res;
+          m.unlock();
+        },
+        ranking, i);
+    // results.push_back(test2(spines, leaves, tasks, func, ranking, 10000));
+  }
+  pool.wait_for_tasks();
+  return results;
+}
+
+double count_stage_energy_cota_up_to_down(vector<set<int>> task_ranking,
+                                          vector<int> &host_to_leaf,
+                                          int stage) {
+  sort(
+      task_ranking.begin(), task_ranking.end(),
+      [](const set<int> &l, const set<int> &r) { return l.size() < r.size(); });
+
+  vector<multiset<int>> Graph(task_ranking.size(), multiset<int>());
+  double stage_energy = 0;
+  int two_degree = pow(2, stage);
+  for (int leaf_id = 0; leaf_id < task_ranking.size(); ++leaf_id) {
+    auto &leaf = task_ranking[leaf_id];
+    // leaves_of_size[leaf.size()]++;
+    for (int host_rank : leaf) {
+      int to_rank = host_rank ^ two_degree;
+      int to_leaf_id = host_to_leaf[to_rank];
+      auto &to_leaf = task_ranking[to_leaf_id];
+      // stage_edges[min(leaf.size(), to_leaf.size())].emplace_back(leaf_id,
+      //                                                            to_leaf_id);
+      Graph[leaf_id].insert(to_leaf_id);
+    }
+  }
+  return -1;
+}
+void mfp_strategy(vector<map<int, int>> &Graph, int colors,
+                  map<int, int> &node_degrees) {
+  for (int color = 0; color < colors; ++color) {
+    vector<pair<int, int>> degree_order;
+    set<int> used_dest;
+    for (auto [node, degree] : node_degrees) {
+      degree_order.emplace_back(degree, node);
+    }
+    sort(degree_order.begin(), degree_order.end());
+    for (auto [degree, node] : degree_order) {
+      int node_to = -1;
+      int flows_to = INT_MAX;
+
+      for (auto [leaf_to, times] : Graph[node]) {
+        if (used_dest.contains(leaf_to))
+          continue;
+        if (times < flows_to) {
+          flows_to = times;
+          node_to = leaf_to;
+        }
+      }
+      if (-1 == node_to)
+        continue;
+
+      used_dest.insert(node_to);
+      Graph[node][node_to]--;
+      if (Graph[node][node_to] == 0) {
+        Graph[node].erase(node_to);
+      }
+      node_degrees[node]--;
+    }
+  }
+}
+double count_stage_energy_cota_down_to_up(vector<set<int>> &task_ranking,
+                                          vector<int> &host_to_leaf, int stage,
+                                          bool interleaf_communication = true) {
+  vector<map<int, int>> Graph(task_ranking.size(), map<int, int>());
+  double stage_energy = 0;
+  auto [stage_edges, leaves_of_size] =
+      prepare_stage_edges(task_ranking, host_to_leaf, stage);
+  auto kv = std::views::keys(stage_edges);
+  vector<int> phases{kv.begin(), kv.end()};
+  sort(phases.begin(), phases.end());
+
+  map<int, int> node_degrees;
+
+  for (int phase_id = (int)phases.size() - 1; phase_id >= 0; --phase_id) {
+    int phase_size = phases[phase_id];
+    auto &edges = stage_edges[phase_size];
+    // need_cover += leaves_of_size[phase_size];
+    for (auto [from, to] : edges) {
+      if ((from != to) || (!interleaf_communication)) {
+        Graph[from][to]++;
+        node_degrees[from]++;
+      }
+    }
+    int new_colors =
+        phase_id > 0 ? phase_size - phases[phase_id - 1] : phase_size;
+    mfp_strategy(Graph, new_colors, node_degrees);
+  }
+  int edges_number = 0;
+  for (auto [_, degree] : node_degrees) {
+    edges_number += degree;
+  }
+  return edges_number;
 }
 
 int main() {
-  run_all_tests("iteration_10000_1.json", run_tests_1, 60);
-  run_all_tests("iteration_10000_2.json", run_tests_2, 60);
-  // cout << debug_test2(3, 5, 10, "1.0");
-  // thread t1([]() { run_all_tests("iteration_10000_1.json", run_tests_1); });
-  // thread t2([]() { run_all_tests("iteration_10000_2.json", run_tests_2); });
-  // t1.join();
-  // t2.join();
-  // run_all_tests("new_scenario1.json", run_tests_1);
-  // run_all_tests("new_scenario2.json", run_tests_2);
-  // int tasks = 3, leaves = 5, spines = 10, max_iter = 100;
-  // auto stat1 = run_tests(3, 5, 10);
-  // auto stat2 = run_tests(3, 10, 20);
-  // map<string, map<string, map<string, int>>> v = {{"(3, 5, 10)", stat1},
-  //                                                 {("3, 10, 20"), stat2}};
-  // json stat_json(v);
-
-  // path cwd = current_path().parent_path();
-  // cwd.append("stats.json");
-  // ofstream file(cwd);
-  // file << stat_json;
-  // file.close();
-  // string alpha = "-0.1";
-  // double (*func)(int) = [](int iter) { return 5000 / double(iter + 1); };
-  // auto tests = read_test(tasks, leaves, spines, alpha);
-  // int not_found_coloring = 0;
-  // int passed_tests = 0;
-  // int failed_tests = 0;
-  // for (int test_id = 0; test_id < tests.size(); ++test_id) {
-  //   // if (test_id != 16)
-  //   //   continue;
-  //   auto &ranking = tests[test_id];
-  //   cout << test_id << ' ';
-  //   cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&" << "\n\n\n";
-  //   switch (test2(spines, leaves, tasks, func, ranking, max_iter)) {
-  //   case 0:
-  //     failed_tests += 1;
-  //   case 1:
-  //     passed_tests += 1;
-  //   case 2:
-  //     not_found_coloring += 1;
-  //     failed_tests += 1;
-  //   }
+  vector<vector<set<int>>> test_rankings = ;
+  for (int i = 0; i < test_rankings.size(); ++i) {
+    auto &test_ranking = test_rankings[i];
+    cout << i << " "
+         << count_energy(test_ranking, count_stage_energy_cota_down_to_up)
+         << ' ' << count_energy(test_ranking, count_stage_energy) << '\n';
+  }
+  // auto [tests, colorings] = read_colored_test(5, 16, 8, "-0.5");
+  // for (int i = 1000; i < 1011; ++i) {
+  //   write_task_ranking(tests[i]);
+  //   cout << colorings[i] << '\n';
+  //   cout << "------------------------\n";
   // }
-  // cout << format("passed tests = {}, failed tests = {}, failed coloring = {},
-  // "
-  //                "total tests = {}",
-  //                passed_tests, failed_tests, not_found_coloring,
-  //                tests.size());
-  //    for (int num: random_split_n_on_k_summands(100, 20)) {
-  //        cout << num << ' ';
-  //    }
 
-  // int max_iter = 100000;
-  // double (*func)(int) = [](int iter) { return 1000 / double(iter + 1); };
-  // cout << (test2(15, 10, 5, 8, func, max_iter) ? "TRUE" : "FALSE");
+  // vector<string> alpha_list = {"-1.0", "-0.9", "-0.8", "-0.7", "-0.6",
+  // "-0.5",
+  //                              "-0.4", "-0.3", "-0.2", "-0.1", "0.0",  "0.1",
+  //                              "0.2",  "0.3",  "0.4",  "0.5",  "0.6",  "0.7",
+  //                              "0.8",  "0.9",  "1.0"};
+  // vector<tuple<int, int, int>> new_tls = {
+  // {4, 16, 8}, {5, 16, 8}, {6, 16, 8}, {7, 16, 8}, {8, 16, 8},
+  // {2, 16, 4}, {3, 16, 4}, {4, 16, 4}, {5, 16, 4}, {6, 16, 4},
+  // {7, 16, 4},
+  // {8, 16, 4},
+  // {2, 32, 8}};
+  // vector<tuple<int, int, int>> old_tls = {
+  //     {2, 8, 4},  {3, 8, 4},  {4, 8, 4},  {5, 8, 4},  {2, 16, 8}, {3, 16, 8},
+  //     {4, 16, 8}, {5, 16, 8}, {6, 16, 8}, {7, 16, 8}, {8, 16, 8}, {2, 32,
+  //     16}};
+  // vector<tuple<int, int, int>> old_tls = {{2, 32, 16}};
 
-  //    auto res = test1(8, 4, 32, func, 1000, -1);
-  //    cout << ((get<1>(res) == 0) ? "true" : "false") << ", " << get<1>(res);
-  //    vector<set<int>> ranking = {set({0,1,2,3}),
-  //    set({4,5,6,7})}; cout << count_energy(ranking, 2,2,8); cout <<
-  //    (5 ^ (int)pow(2,0)); std::mt19937 rng(seed);
-  //    uniform_int_distribution<int> dist(0, 10);
-  //    for (int i = 0; i < 10; ++i) {
-  //        cout << dist(rng) << '\n';
-  //    }
+  // for (auto [tasks, leaves, spines] : new_tls) {
+  //   string stats_filename = format("{}_{}_{}.json", tasks, leaves, spines);
+  //   cout << stats_filename << endl;
+  //   unordered_map<string, vector<int>> results;
+  //   for (string alpha : alpha_list) {
+  //     auto res =
+  //         colored_test2(tasks, leaves, spines, alpha,
+  //         "new_multi_tasks_tests");
+  //     results[alpha] = res;
+  //   }
+  //   json stat_json(results);
+  //   path cwd = current_path().parent_path();
+  //   cwd.append("new_multi_tasks_tests_results_scenario2");
+  //   cwd.append(stats_filename);
+  //   ofstream file(cwd);
+  //   file << stat_json;
+  //   file.close();
+  // }
 
-  //    graaf::undirected_graph<pair<int, int>, int> g;
-  //
-  //    const auto a = g.add_vertex(make_pair(1, 2));
-  //    const auto b = g.add_vertex(make_pair(1, 3));
-  //    const auto c = g.add_vertex(make_pair(1, 3));
-
-  //    vector<int> a = {1, 4, 3, 2, 2, 4, 3, 5, 6, 3, 2, 4};
-  //    set<int> s(a.begin(), a.end());
-  //    for (int x: s) {
-  //        cout << x << '\n';
-  //    }
-  //    cout << "size " << s.size();
+  // for (auto [tasks, leaves, spines] : new_tls) {
+  //   string stats_filename = format("{}_{}_{}.json", tasks, leaves, spines);
+  //   cout << stats_filename << endl;
+  //   unordered_map<string, vector<int>> results;
+  //   for (string alpha : alpha_list) {
+  //     auto res =
+  //         colored_test1(tasks, leaves, spines, alpha,
+  //         "new_multi_tasks_tests");
+  //     results[alpha] = res;
+  //   }
+  //   json stat_json(results);
+  //   path cwd = current_path().parent_path();
+  //   cwd.append("new_multi_tasks_tests_results_scenario1");
+  //   cwd.append(stats_filename);
+  //   ofstream file(cwd);
+  //   file << stat_json;
+  //   file.close();
+  // }
+  // cout << "------------------------\n";
+  // for (auto [tasks, leaves, spines] : old_tls) {
+  //   string stats_filename = format("{}_{}_{}.json", tasks, leaves, spines);
+  //   cout << stats_filename << endl;
+  //   unordered_map<string, vector<int>> results;
+  //   for (string alpha : alpha_list) {
+  //     auto res =
+  //         colored_test1(tasks, leaves, spines, alpha, "multi_tasks_tests");
+  //     results[alpha] = res;
+  //   }
+  //   json stat_json(results);
+  //   path cwd = current_path().parent_path();
+  //   cwd.append("multi_tasks_tests_results_scenario1");
+  //   cwd.append(stats_filename);
+  //   ofstream file(cwd);
+  //   file << stat_json;
+  //   file.close();
+  // }
 }

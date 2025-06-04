@@ -15,7 +15,7 @@ def draw_success_part(stat_name):
     stats = get_statistic(stat_name)
     n = len(stats)
     fig, axs = plt.subplots(n, figsize=(10, 8))
-
+    
     for plot_id, (config, results) in enumerate(stats.items()):
         tasks, leaves, spines = eval(config)
         x = list(map(float, results.keys()))
@@ -32,4 +32,3 @@ def draw_success_part(stat_name):
 
 
 draw_success_part("new_scenario2.json")
-
