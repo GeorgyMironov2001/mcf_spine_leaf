@@ -1,0 +1,7 @@
+py_env/
+.vscode/
+.cache/
+MCF_spine_leaf/build/
+.ipynb_checkpoints/
+Simulator/.cache/
+Simulator/build/

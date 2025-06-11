@@ -7,11 +7,11 @@ C_DEFINES =
 
 C_INCLUDES = @CMakeFiles/MCF_spine_leaf.dir/includes_C.rsp
 
-C_FLAGS = -g
+C_FLAGS = -O3 -DNDEBUG
 
 CXX_DEFINES = 
 
 CXX_INCLUDES = @CMakeFiles/MCF_spine_leaf.dir/includes_CXX.rsp
 
-CXX_FLAGS = -g -std=gnu++23
+CXX_FLAGS = -O3 -DNDEBUG -std=gnu++23
 

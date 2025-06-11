@@ -24,9 +24,11 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
 
 const int seed = 42;
 std::mt19937 rng(seed);
+
 using namespace std;
 using namespace std::filesystem;
 using json = nlohmann::json;
@@ -292,29 +294,28 @@ vector<vector<set<int>>> get_network_assignment(int spines, int leaves,
 auto prepare_stage_edges(vector<set<int>> &task_ranking,
                          vector<int> &host_to_leaf, int stage) {
   int two_degree = pow(2, stage);
-  unordered_map<size_t, vector<pair<int, int>>> stage_edges;
+  unordered_map<size_t, vector<tuple<int, int, int, int>>> stage_edges;
   unordered_map<size_t, int> leaves_of_size;
   for (int leaf_id = 0; leaf_id < task_ranking.size(); ++leaf_id) {
     auto &leaf = task_ranking[leaf_id];
     leaves_of_size[leaf.size()]++;
-    for (int host_rank : leaf) {
-      int to_rank = host_rank ^ two_degree;
+    for (int from_rank : leaf) {
+      int to_rank = from_rank ^ two_degree;
       int to_leaf_id = host_to_leaf[to_rank];
       auto &to_leaf = task_ranking[to_leaf_id];
-      stage_edges[min(leaf.size(), to_leaf.size())].emplace_back(leaf_id,
-                                                                 to_leaf_id);
+      stage_edges[min(leaf.size(), to_leaf.size())].emplace_back(
+          leaf_id, to_leaf_id, from_rank, to_rank);
     }
   }
-  return tuple<unordered_map<size_t, vector<pair<int, int>>>,
-               unordered_map<size_t, int>>(stage_edges, leaves_of_size);
+  return make_tuple(stage_edges, leaves_of_size);
 }
 
-bool try_kuhn(vector<multiset<int>> &Graph, vector<int> &matching,
-              vector<bool> &used, int leaf_id) {
+bool try_kuhn(vector<map<int, vector<pair<int, int>>>> &Graph,
+              vector<int> &matching, vector<bool> &used, int leaf_id) {
   if (used[leaf_id])
     return false;
   used[leaf_id] = true;
-  for (int to_leaf_id : Graph[leaf_id]) {
+  for (auto &[to_leaf_id, _] : Graph[leaf_id]) {
     if (matching[to_leaf_id] == -1 ||
         try_kuhn(Graph, matching, used, matching[to_leaf_id])) {
       matching[to_leaf_id] = leaf_id;
@@ -324,40 +325,49 @@ bool try_kuhn(vector<multiset<int>> &Graph, vector<int> &matching,
   return false;
 }
 
-void remove_matching_from_graph(vector<multiset<int>> &Graph,
-                                vector<int> &matching) {
+void remove_matching_from_graph(vector<map<int, vector<pair<int, int>>>> &Graph,
+                                vector<int> &matching, int color,
+                                map<tuple<int, int, int>, int> &task_coloring,
+                                int stage) {
   for (int to_id = 0; to_id < matching.size(); ++to_id) {
     int from_id = matching[to_id];
     if (from_id == -1)
       continue;
-    auto it = Graph[from_id].find(to_id);
-    Graph[from_id].erase(it);
+    auto [rank_from, rank_to] = Graph[from_id][to_id].back();
+    task_coloring[make_tuple(stage, rank_from, rank_to)] = color;
+
+    Graph[from_id][to_id].pop_back();
+    if (Graph[from_id][to_id].empty()) {
+      Graph[from_id].erase(to_id);
+    }
+    // auto it = Graph[from_id].find(to_id);
+    // Graph[from_id].erase(it);
     // Graph[from_id].erase(to_id);
   }
 }
 
-double kuhn(vector<multiset<int>> &Graph, int need_cover, int kuhn_times) {
-  double add_energy = 0;
-  vector<bool> used(Graph.size(), false);
-  for (int _ = 0; _ < kuhn_times; ++_) {
+// double kuhn(vector<multiset<int>> &Graph, int need_cover, int kuhn_times) {
+//   double add_energy = 0;
+//   vector<bool> used(Graph.size(), false);
+//   for (int _ = 0; _ < kuhn_times; ++_) {
 
-    vector<int> matching(Graph.size(), -1);
-    for (int i = 0; i < Graph.size(); ++i) {
-      used.assign(Graph.size(), false);
-      try_kuhn(Graph, matching, used, i);
-    }
+//     vector<int> matching(Graph.size(), -1);
+//     for (int i = 0; i < Graph.size(); ++i) {
+//       used.assign(Graph.size(), false);
+//       try_kuhn(Graph, matching, used, i);
+//     }
 
-    int matching_size = 0;
-    for (int from : matching) {
-      if (from != -1)
-        matching_size++;
-    }
-    add_energy += need_cover - matching_size;
+//     int matching_size = 0;
+//     for (int from : matching) {
+//       if (from != -1)
+//         matching_size++;
+//     }
+//     add_energy += need_cover - matching_size;
 
-    remove_matching_from_graph(Graph, matching);
-  }
-  return add_energy;
-}
+//     remove_matching_from_graph(Graph, matching);
+//   }
+//   return add_energy;
+// }
 
 // double count_stage_energy(vector<set<int>> &task_ranking,
 //                           vector<int> &host_to_leaf, int stage) {
@@ -382,10 +392,14 @@ double kuhn(vector<multiset<int>> &Graph, int need_cover, int kuhn_times) {
 //   return stage_energy;
 // }
 
-void kuhn_use_tor_switch(vector<multiset<int>> &Graph, int kuhn_times) {
-  double add_energy = 0;
+void kuhn_use_tor_switch(vector<map<int, vector<pair<int, int>>>> &Graph,
+                         int kuhn_times, int phase_size,
+                         map<tuple<int, int, int>, int> &task_coloring,
+                         int stage) {
+  // double add_energy = 0;
   vector<bool> used(Graph.size(), false);
-  for (int _ = 0; _ < kuhn_times; ++_) {
+  for (int color_id = 0; color_id < kuhn_times; ++color_id) {
+    int color = phase_size - color_id;
 
     vector<int> matching(Graph.size(), -1);
     for (int i = 0; i < Graph.size(); ++i) {
@@ -393,26 +407,27 @@ void kuhn_use_tor_switch(vector<multiset<int>> &Graph, int kuhn_times) {
       try_kuhn(Graph, matching, used, i);
     }
 
-    int matching_size = 0;
-    for (int from : matching) {
-      if (from != -1)
-        matching_size++;
-    }
+    // int matching_size = 0;
+    // for (int from : matching) {
+    //   if (from != -1)
+    //     matching_size++;
+    // }
     // add_energy += need_cover - matching_size;
 
-    remove_matching_from_graph(Graph, matching);
+    remove_matching_from_graph(Graph, matching, color, task_coloring, stage);
   }
   // return add_energy;
 }
 
 double count_stage_energy(vector<set<int>> &task_ranking,
                           vector<int> &host_to_leaf, int stage,
+                          map<tuple<int, int, int>, int> &task_coloring,
                           bool interleaf_communication = true) {
-  vector<multiset<int>> Graph(task_ranking.size(), multiset<int>());
+  vector<map<int, vector<pair<int, int>>>> Graph(task_ranking.size());
+
   double stage_energy = 0;
-  auto prepare_stage = prepare_stage_edges(task_ranking, host_to_leaf, stage);
-  auto &stage_edges = get<0>(prepare_stage);
-  auto &leaves_of_size = get<1>(prepare_stage);
+  auto [stage_edges, leaves_of_size] =
+      prepare_stage_edges(task_ranking, host_to_leaf, stage);
   // int need_cover = 0;
   auto kv = std::views::keys(stage_edges);
   vector<int> phases{kv.begin(), kv.end()};
@@ -421,15 +436,16 @@ double count_stage_energy(vector<set<int>> &task_ranking,
     int phase_size = phases[phase_id];
     auto &edges = stage_edges[phase_size];
     // need_cover += leaves_of_size[phase_size];
-    for (auto [from, to] : edges) {
+    for (auto [leaf_from, leaf_to, rank_from, rank_to] : edges) {
 
-      if ((from != to) || (!interleaf_communication)) {
-        Graph[from].insert(to);
+      if ((leaf_from != leaf_to) || (!interleaf_communication)) {
+        // Graph[from].insert(to);
+        Graph[leaf_from][leaf_to].emplace_back(rank_from, rank_to);
       }
     }
     int kuhn_times =
         phase_id > 0 ? phase_size - phases[phase_id - 1] : phase_size;
-    kuhn_use_tor_switch(Graph, kuhn_times);
+    kuhn_use_tor_switch(Graph, kuhn_times, phase_size, task_coloring, stage);
   }
 
   int edges_number = 0;
@@ -440,11 +456,13 @@ double count_stage_energy(vector<set<int>> &task_ranking,
   return edges_number;
 }
 
-double count_energy(vector<set<int>> &task_ranking,
-                    double (*count_stage_energy_func)(vector<set<int>> &,
-                                                      vector<int> &, int,
-                                                      bool)) {
+auto count_energy(
+    vector<set<int>> &task_ranking,
+    double (*count_stage_energy_func)(vector<set<int>> &, vector<int> &, int,
+                                      map<tuple<int, int, int>, int> &, bool)) {
   double energy = 0;
+  map<tuple<int, int, int>, int> task_coloring;
+
   vector<int> host_to_leaf(1);
   //    set<int> leaf_sizes;
   int task_hosts = 0;
@@ -466,33 +484,40 @@ double count_energy(vector<set<int>> &task_ranking,
     throw std::runtime_error("number of hosts on task is not a power of two");
   }
   for (int stage = 0; stage < stages; ++stage) {
-    energy += count_stage_energy_func(task_ranking, host_to_leaf, stage, true);
+    energy += count_stage_energy_func(task_ranking, host_to_leaf, stage,
+                                      task_coloring, true);
   }
-  return energy;
+  return make_tuple(energy, task_coloring);
 }
 
-bool check_congestionless_ranking(vector<set<int>> &task_ranking, int task_id,
+auto check_congestionless_ranking(vector<set<int>> &task_ranking, int task_id,
                                   double (*schedule_temp)(int),
                                   int max_iter = 100) {
-  double prev_energy = count_energy(task_ranking, count_stage_energy);
+
+  auto [prev_energy, prev_coloring] =
+      count_energy(task_ranking, count_stage_energy);
+
   uniform_real_distribution<double> distribution(0.0, 1.0);
   for (int iter = 0; iter < max_iter; ++iter) {
     if (prev_energy == 0)
       break;
     double T = schedule_temp(iter);
     auto new_ranking = get_swap_neighbor(task_ranking, task_id);
-    double new_energy = count_energy(new_ranking, count_stage_energy);
+    auto [new_energy, new_coloring] =
+        count_energy(new_ranking, count_stage_energy);
     if (new_energy < prev_energy) {
       task_ranking = std::move(new_ranking);
       prev_energy = new_energy;
+      prev_coloring = std::move(new_coloring);
       continue;
     }
     if (pow(M_E, (prev_energy - new_energy) / T) > distribution(rng)) {
       task_ranking = std::move(new_ranking);
       prev_energy = new_energy;
+      prev_coloring = std::move(new_coloring);
     }
   }
-  return prev_energy == 0;
+  return make_tuple(prev_energy == 0, prev_coloring);
 }
 
 void add_clique(vector<pair<int, int>> &clique_nodes, int from,
@@ -580,8 +605,8 @@ bool hypergraph_edge_coloring_exists(vector<vector<set<int>>> &ranking,
   return s.size() <= spines;
 }
 
-int test2(int spines, int leaves, int tasks, double (*schedule_temp)(int),
-          vector<vector<set<int>>> &ranking, int max_iter = 100) {
+auto test2(int spines, int leaves, int tasks, double (*schedule_temp)(int),
+           vector<vector<set<int>>> &ranking, int max_iter = 100) {
   // auto ranking =
   //     get_network_assignment(spines, leaves, max_two_power_on_task, tasks);
   // write_task_ranking(ranking);
@@ -589,14 +614,20 @@ int test2(int spines, int leaves, int tasks, double (*schedule_temp)(int),
   //   // cout << "can`t find proper coloring\n";
   //   return 2;
   // }
-  for (int task = 0; task < tasks; ++task) {
-    if (!check_congestionless_ranking(ranking[task], task, schedule_temp,
-                                      max_iter)) {
-      return 0;
+  map<tuple<int, int, int, int>, int> coloring;
+  int result = 1;
+  for (int task_id = 0; task_id < tasks; ++task_id) {
+    auto [task_res, task_coloring] = check_congestionless_ranking(
+        ranking[task_id], task_id, schedule_temp, max_iter);
+    result *= task_res;
+    for (auto &[edge, color] : task_coloring) {
+      auto [stage, rank_from, rank_to] = edge;
+      coloring[make_tuple(task_id, stage, rank_from, rank_to)] = color;
     }
   }
+  return make_tuple(result, coloring);
   // write_task_ranking(ranking);
-  return 1;
+  // return 1;
 }
 
 vector<vector<set<int>>> get_ranking_from_json(int tasks, int leaves,
@@ -706,7 +737,7 @@ auto run_tests_2(int tasks, int leaves, int spines, int max_iter = 10000,
     for (auto ranking : tests) {
       pool.submit(
           [&](auto test_ranking, string test_alpha) {
-            auto res =
+            auto [res, _] =
                 test2(spines, leaves, tasks, func, test_ranking, max_iter);
             m.lock();
             switch (res) {
@@ -724,18 +755,6 @@ auto run_tests_2(int tasks, int leaves, int spines, int max_iter = 10000,
             m.unlock();
           },
           ranking, alpha);
-      // switch (test2(spines, leaves, tasks, func, ranking, max_iter)) {
-      // case 0:
-      //   statistic[alpha]["failed_tests"] += 1;
-      //   break;
-      // case 1:
-      //   statistic[alpha]["passed_tests"] += 1;
-      //   break;
-      // case 2:
-      //   statistic[alpha]["not_found_coloring"] += 1;
-      //   statistic[alpha]["failed_tests"] += 1;
-      //   break;
-      // }
     }
   }
   pool.wait_for_tasks();
@@ -784,13 +803,13 @@ auto debug_test2(int tasks, int leaves, int spines, string alpha) {
     auto ranking = tests[i];
     pool.submit(
         [&](auto test_ranking, int pos) {
-          auto res = test2(spines, leaves, tasks, func, test_ranking, 10000);
+          auto [res, _] =
+              test2(spines, leaves, tasks, func, test_ranking, 10000);
           m.lock();
           results[pos] = res;
           m.unlock();
         },
         ranking, i);
-    // results.push_back(test2(spines, leaves, tasks, func, ranking, 10000));
   }
   pool.wait_for_tasks();
   return results;
@@ -850,13 +869,13 @@ auto colored_test2(int tasks, int leaves, int spines, string alpha,
     auto ranking = tests[i];
     pool.submit(
         [&](auto test_ranking, int pos) {
-          auto res = test2(spines, leaves, tasks, func, test_ranking, 10000);
+          auto [res, _] =
+              test2(spines, leaves, tasks, func, test_ranking, 10000);
           m.lock();
           results[pos] = res;
           m.unlock();
         },
         ranking, i);
-    // results.push_back(test2(spines, leaves, tasks, func, ranking, 10000));
   }
   pool.wait_for_tasks();
   return results;
@@ -882,7 +901,6 @@ auto colored_test1(int tasks, int leaves, int spines, string alpha,
           m.unlock();
         },
         ranking, i);
-    // results.push_back(test2(spines, leaves, tasks, func, ranking, 10000));
   }
   pool.wait_for_tasks();
   return results;
@@ -945,9 +963,11 @@ void mfp_strategy(vector<map<int, int>> &Graph, int colors,
     }
   }
 }
-double count_stage_energy_cota_down_to_up(vector<set<int>> &task_ranking,
-                                          vector<int> &host_to_leaf, int stage,
-                                          bool interleaf_communication = true) {
+double count_stage_energy_cota_down_to_up(
+    vector<set<int>> &task_ranking, vector<int> &host_to_leaf, int stage,
+    map<tuple<int, int, int>, int> &task_coloring,
+    bool interleaf_communication = true) {
+
   vector<map<int, int>> Graph(task_ranking.size(), map<int, int>());
   double stage_energy = 0;
   auto [stage_edges, leaves_of_size] =
@@ -962,7 +982,7 @@ double count_stage_energy_cota_down_to_up(vector<set<int>> &task_ranking,
     int phase_size = phases[phase_id];
     auto &edges = stage_edges[phase_size];
     // need_cover += leaves_of_size[phase_size];
-    for (auto [from, to] : edges) {
+    for (auto &[from, to, rank_from, rank_to] : edges) {
       if ((from != to) || (!interleaf_communication)) {
         Graph[from][to]++;
         node_degrees[from]++;
@@ -980,13 +1000,1040 @@ double count_stage_energy_cota_down_to_up(vector<set<int>> &task_ranking,
 }
 
 int main() {
-  vector<vector<set<int>>> test_rankings = ;
-  for (int i = 0; i < test_rankings.size(); ++i) {
-    auto &test_ranking = test_rankings[i];
-    cout << i << " "
-         << count_energy(test_ranking, count_stage_energy_cota_down_to_up)
-         << ' ' << count_energy(test_ranking, count_stage_energy) << '\n';
+
+  vector<vector<set<int>>> test_ranking = {
+      {{{46, 60,  95,  96,  65, 118, 6,  80, 47, 97, 106, 68, 125, 114, 73, 26,
+         58, 117, 123, 100, 93, 63,  61, 17, 20, 49, 43,  9,  111, 91,  24, 62},
+        {77, 21,  120, 82, 39, 18, 94, 67, 13, 55, 90, 5, 12,
+         27, 121, 8,   75, 7,  41, 74, 50, 3,  29, 81, 78},
+        {59, 99, 113, 11,  112, 31, 127, 30, 37, 42, 83, 28, 71, 105, 122,
+         87, 64, 16,  101, 23,  57, 69,  40, 0,  85, 79, 14, 86, 70},
+        {38,  1,   2,  33, 54, 124, 84, 15, 88, 51, 44,  72, 110, 104,
+         102, 119, 45, 36, 56, 76,  48, 19, 32, 53, 115, 66, 25},
+        {52, 10, 34, 35, 107, 4, 22, 98, 109, 92, 126, 108, 103, 116, 89},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {106, 82, 68, 52, 40, 84, 35},
+        {22, 64, 74},
+        {20, 67, 15, 24, 44},
+        {71, 87, 116, 114, 14, 21, 62, 12, 59, 112, 6, 41, 66, 34, 23, 125, 88},
+        {78,  102, 69, 43, 81, 25, 79,  30,  77, 33, 93, 91, 13, 16,  28,  2,
+         113, 118, 46, 86, 29, 72, 127, 121, 55, 73, 4,  18, 97, 103, 107, 51},
+        {70, 104, 8,  53, 0,  37,  36,  39, 45, 99, 126, 26, 60, 83, 115, 122,
+         19, 119, 56, 96, 85, 111, 108, 80, 57, 48, 50,  1,  89, 95, 42,  11},
+        {49, 5,   17, 100, 27, 32,  120, 94, 7,   92, 123, 65, 10,
+         61, 110, 3,  90,  76, 124, 9,   54, 101, 75, 31,  58, 117},
+        {38, 47, 109, 98, 105, 63},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {107, 37, 1, 95, 33, 8},
+        {91, 84, 59,  19, 70,  61, 125, 102, 78, 123, 25,  14, 7,
+         11, 50, 117, 52, 103, 30, 114, 54,  62, 4,   112, 81, 96},
+        {110, 69, 76, 77, 80,  56, 73, 68, 89, 45, 71, 49, 24, 86,  43, 121,
+         38,  57, 28, 79, 127, 67, 17, 41, 51, 87, 36, 18, 75, 109, 42, 15},
+        {40,  47,  26, 124, 13,  94,  9,   31,  66,  88,  93,
+         104, 97,  98, 64,  3,   35,  100, 120, 111, 108, 23,
+         48,  101, 82, 2,   119, 106, 113, 16,  118, 122},
+        {90, 27, 5, 83, 21, 85,  58, 63, 116, 65,
+         46, 53, 0, 60, 6,  105, 39, 55, 74,  72},
+        {44, 32, 20, 12, 29, 92},
+        {34, 126, 99, 10, 115, 22},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {43, 89, 28, 109, 45, 40, 83, 80, 42, 0, 103, 82},
+        {97, 1,  8,  32, 9,  58, 96, 114, 35, 24,  108, 59, 66,
+         18, 78, 64, 67, 23, 46, 2,  117, 14, 101, 119, 73, 110},
+        {30,  34, 115, 55, 122, 38, 48,  102, 39,  79, 53, 65,  86,
+         121, 77, 76,  50, 4,   29, 104, 3,   100, 68, 21, 127, 107},
+        {5,  93, 71, 63, 26,  99, 49, 120, 75, 94, 85, 15, 47, 51,
+         31, 20, 12, 6,  123, 70, 92, 90,  37, 57, 52, 81, 105},
+        {54, 106, 27, 13, 61, 126, 91, 87, 84, 44, 17, 69, 33, 22, 125, 25, 72},
+        {88, 111, 19, 16, 98, 62, 41, 118, 112, 60, 74, 113, 95},
+        {11, 10, 36, 124, 56, 7, 116},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {83, 85, 102, 29, 61},
+        {14, 55, 95, 110, 92, 38, 26, 56, 89, 24, 122, 11, 88, 125, 23},
+        {98, 97, 112, 8, 63, 40, 73, 105, 5, 78, 16, 96, 101, 67, 12, 75, 84,
+         58, 28},
+        {115, 33,  93,  87, 86, 103, 123, 30, 27, 4,   59, 22, 54,
+         118, 111, 109, 50, 62, 108, 57,  41, 46, 124, 91, 36},
+        {119, 0,  43,  9,   79, 48, 15, 39, 32, 100, 6,
+         76,  25, 126, 107, 81, 82, 94, 17, 44, 99,  68},
+        {116, 18,  80,  49, 2,  7,  31, 90,  106, 66, 3,   127, 69, 120,
+         70,  117, 114, 34, 51, 19, 65, 121, 52,  71, 104, 10,  77},
+        {37, 47, 53, 113, 1, 42, 35, 74, 21, 72, 13, 45, 20},
+        {},
+        {64, 60},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {125, 61, 75, 31, 42, 0, 112, 70, 88, 104},
+        {50, 111, 65, 10, 102},
+        {114, 67, 124, 8, 52, 110, 48, 54, 45, 90, 83, 58, 81, 3, 47, 46, 77,
+         76, 20},
+        {63, 92, 19, 12,  93, 72, 105, 116, 74, 39,  126, 41, 82, 33,  30, 56,
+         4,  21, 53, 103, 32, 86, 109, 115, 71, 100, 27,  22, 98, 118, 24, 113},
+        {34, 68, 5,  73,  89, 28, 120, 35, 94, 91, 43, 2,
+         26, 96, 13, 107, 44, 78, 85,  80, 49, 97, 7},
+        {51,  57,  99, 64, 29,  25, 66, 18, 40,  23,  16, 122,
+         121, 108, 95, 62, 123, 6,  15, 79, 119, 101, 127},
+        {84, 17, 87, 37, 9, 14, 69, 106, 36, 1, 11, 59, 38, 55, 60, 117},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {14, 103, 39, 107, 15, 90, 69},
+        {126, 55, 100, 118, 23, 63, 22, 91, 84},
+        {97, 3, 71, 68, 110, 32, 104, 49, 102, 25, 45, 54, 35, 52, 43, 46},
+        {72, 101, 37, 29, 83, 34, 11, 2,   120, 56, 53, 119, 66, 42, 116, 9,
+         20, 0,   5,  24, 75, 76, 62, 115, 127, 64, 10, 122, 99, 31, 36,  48},
+        {74, 93, 113, 95, 33, 88,  67, 105, 112, 60, 7,  41, 27, 44, 38,
+         47, 73, 82,  21, 86, 124, 6,  125, 77,  58, 65, 30, 80, 98},
+        {13, 8, 87, 108, 4, 96, 78, 1, 117, 18, 111, 94, 51, 123, 70, 114, 59,
+         92},
+        {57, 50, 40, 16, 106, 79, 12, 17, 85, 89, 26, 81, 28, 109, 19, 121, 61},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {84, 30, 64},
+        {110, 23, 115, 86, 18, 122, 13, 47, 20, 120, 7, 0, 73, 87},
+        {70, 43, 99, 88, 63, 119, 65, 90, 97, 33, 51, 6, 44, 37, 5},
+        {71,  25,  31,  112, 80,  103, 3,  8,  28, 82, 91,
+         92,  32,  109, 40,  74,  102, 66, 4,  69, 45, 76,
+         111, 104, 89,  100, 101, 41,  19, 39, 14, 75},
+        {107, 126, 10, 61, 113, 17,  56, 124, 42,  106, 96, 1,  2, 34,
+         78,  59,  50, 9,  98,  125, 81, 27,  118, 95,  94, 67, 38},
+        {121, 68, 26, 36, 127, 12, 11, 105, 114, 29, 62,
+         46,  60, 72, 35, 48,  24, 57, 108, 52,  79},
+        {21, 93, 83, 117, 58, 77, 116, 49, 85, 22, 54, 15, 16, 53, 123, 55},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {27, 101, 56, 45, 36},
+        {30, 87, 41, 4, 121, 109, 7, 24, 0, 75, 33},
+        {106, 26, 107, 57, 47, 66, 50, 113, 127, 67, 114, 61, 88, 35, 29, 126},
+        {1,  90,  49, 25, 120, 102, 37, 11, 97, 9,  96,  117, 98, 72, 93, 21,
+         77, 110, 65, 62, 22,  69,  19, 83, 43, 17, 118, 5,   76, 79, 16, 60},
+        {42, 82,  55, 92, 105, 12,  38,  116, 124, 8,  34,
+         70, 123, 73, 20, 80,  119, 122, 3,   85,  6,  100,
+         53, 74,  91, 63, 59,  71,  31,  115, 14,  104},
+        {99, 10, 51, 46, 18, 78, 44, 95, 108, 32, 103, 112, 28,
+         89, 48, 64, 39, 15, 2,  81, 23, 94,  68, 13,  86,  52},
+        {84, 54, 40, 58, 125, 111},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {9, 13, 82, 46, 7, 114},
+        {26, 45,  103, 18, 30, 104, 58,  17, 121, 48,  43, 110, 77,
+         28, 118, 47,  15, 74, 4,   111, 91, 51,  108, 31, 116, 109},
+        {117, 42,  113, 125, 34, 33,  38, 93,  105, 44, 106,
+         63,  101, 94,  84,  87, 98,  35, 102, 1,   37, 120,
+         67,  14,  3,   86,  23, 100, 8,  52,  36,  126},
+        {19, 115, 62, 81, 50, 71, 57, 123, 83, 53, 78, 99, 92, 59, 96,  54,
+         20, 119, 79, 76, 0,  95, 29, 122, 5,  49, 75, 65, 89, 40, 124, 107},
+        {127, 80, 112, 61, 70, 12, 25, 66, 97, 11, 55, 32,
+         10,  73, 22,  41, 88, 85, 72, 90, 2,  39, 68},
+        {6, 64, 24, 60, 21},
+        {27, 16, 69, 56},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {102, 22, 43, 37, 126, 2, 99, 83, 42},
+        {111, 69, 29, 98, 65, 58,  23,  54, 71, 60, 82,  31, 0,  20,
+         49,  36, 17, 18, 14, 117, 118, 77, 44, 1,  108, 93, 120},
+        {106, 5,  52,  9,  21,  103, 63, 75, 35, 59, 124, 116, 46,  85,
+         4,   30, 113, 88, 100, 112, 87, 34, 84, 64, 115, 79,  114, 41},
+        {25, 15, 48, 7,  61, 66, 32, 53, 39, 81, 91, 28,  47, 96,
+         24, 57, 51, 16, 38, 67, 97, 50, 76, 56, 94, 107, 27, 12},
+        {127, 104, 3,  119, 40, 62, 121, 89,  10, 78, 6, 105, 109, 123,
+         74,  80,  72, 92,  13, 95, 45,  101, 68, 73, 8, 90,  110},
+        {26, 125, 19, 55, 122, 33, 11, 86, 70},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {56, 50, 95, 44},
+        {123, 82, 109, 47, 117},
+        {110, 118, 68, 98, 33, 80, 85, 2,  107, 119, 76, 126,
+         77,  92,  35, 86, 46, 55, 93, 41, 100, 104, 122},
+        {45,  91, 24, 73,  3,  19, 34, 52, 108, 6,  15, 99, 31, 65, 94, 17,
+         105, 25, 38, 120, 10, 63, 70, 28, 18,  43, 49, 23, 37, 48, 79, 71},
+        {0, 30, 121, 115, 72, 13, 20, 32, 102, 112, 88, 78, 61, 62, 53, 90, 29,
+         101, 27},
+        {74,  59,  16, 8, 1,   36, 75, 39,  54, 11, 97,
+         113, 114, 60, 4, 111, 57, 14, 103, 81, 66, 124},
+        {69,  12, 67,  7,   5,  84, 58, 83, 116, 22, 89,
+         125, 21, 106, 127, 96, 42, 64, 51, 87,  9,  26},
+        {40},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {56, 193, 23, 73, 175, 250, 139, 64, 49, 30, 31, 246, 92},
+        {66, 206, 173, 129, 15, 112, 68, 19, 220, 198},
+        {187, 75, 81, 44, 217, 136, 25, 142, 28, 163},
+        {153, 237, 114, 200, 177, 164, 191, 185, 38,  39, 113,
+         45,  109, 46,  241, 57,  196, 100, 146, 150, 35, 74,
+         123, 111, 62,  165, 156, 154, 192, 201, 76},
+        {43,  135, 98,  40,  124, 184, 130, 131, 89,  53,  155,
+         232, 223, 151, 249, 218, 3,   197, 226, 48,  147, 63,
+         78,  26,  143, 152, 251, 140, 166, 128, 199, 141},
+        {51,  69,  33,  183, 52, 160, 239, 247, 0,   86,  159,
+         13,  227, 50,  254, 32, 121, 21,  181, 12,  127, 145,
+         245, 47,  209, 213, 58, 101, 88,  34,  212, 167},
+        {202, 71,  243, 253, 59,  189, 125, 103, 138, 119, 60,
+         20,  230, 195, 107, 188, 87,  229, 41,  137, 122, 149,
+         158, 118, 215, 95,  182, 67,  211, 82,  11,  210},
+        {235, 252, 18, 178, 54,  90,  244, 5,   219, 134, 115,
+         61,  248, 9,  2,   116, 132, 84,  174, 105, 16,  108,
+         102, 79,  6,  36,  22,  133, 238, 240, 234, 170},
+        {216, 55,  233, 180, 110, 236, 42,  186, 221, 144, 27,  194, 157, 222,
+         93,  224, 65,  176, 83,  203, 172, 225, 70,  204, 207, 214, 8},
+        {190, 77, 29, 117, 255, 179, 72, 208, 168, 106, 99, 126, 80, 85, 91,
+         169, 4},
+        {161, 1, 162, 10, 7, 148, 120, 96, 14, 97, 37, 231},
+        {242, 205, 24, 94, 228, 17, 104, 171},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}}},
+      {{{},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {115, 173, 127, 68, 242},
+        {29, 85, 88, 121, 80, 25, 41, 174, 105, 168, 74, 131, 176, 182, 154},
+        {133, 126, 20,  38,  157, 250, 202, 215, 22,  136,
+         0,   201, 156, 183, 79,  198, 66,  70,  189, 170},
+        {86,  179, 223, 120, 16,  128, 206, 243, 204, 172, 219, 160,
+         239, 224, 152, 237, 101, 205, 214, 117, 241, 217, 209, 139},
+        {184, 213, 84, 110, 63,  221, 254, 125, 39,  46,  190,
+         163, 90,  26, 135, 162, 69,  21,  165, 245, 186, 7,
+         195, 231, 51, 23,  210, 60,  59,  194, 65,  116},
+        {62,  104, 113, 36,  64,  15,  81, 32,  192, 232, 92,
+         252, 253, 71,  236, 31,  153, 2,  222, 77,  137, 230,
+         177, 9,   12,  13,  233, 220, 47, 193, 129, 27},
+        {248, 93, 33, 56,  4,   228, 148, 61,  89, 138, 229,
+         123, 17, 43, 208, 226, 52,  247, 45,  73, 44,  8,
+         164, 98, 14, 72,  166, 145, 114, 141, 1,  200},
+        {40,  96,  191, 196, 118, 54,  95,  151, 132, 76,  181,
+         227, 130, 234, 119, 169, 58,  53,  11,  28,  140, 244,
+         150, 108, 19,  240, 107, 158, 175, 238, 159, 50},
+        {103, 212, 171, 124, 146, 57,  211, 87,  249, 37, 251,
+         5,   187, 144, 49,  6,   91,  255, 149, 225, 42, 35,
+         167, 75,  106, 218, 48,  134, 30,  147, 199, 216},
+        {55,  24, 188, 143, 99,  78,  122, 109, 83,  100, 197,
+         94,  67, 161, 142, 18,  10,  111, 185, 207, 82,  155,
+         203, 97, 112, 246, 180, 235, 102, 34,  178, 3}}}};
+
+  double (*func)(int) = [](int iter) { return 100000 / double(iter + 1); };
+  auto [res, coloring] = test2(32, 64, 14, func, test_ranking, 100000);
+  cout << "Result = " << res << '\n';
+  // write_task_ranking(test_ranking);
+
+  path cwd = current_path().parent_path();
+  cwd.append("output_coloring.txt");
+  ofstream output_coloring(cwd, ios::trunc);
+  if (!output_coloring.is_open()) {
+    cout << "file is not open" << endl;
   }
+  for (auto [edge, color] : coloring) {
+    auto [task_id, stage, rank_from, rank_to] = edge;
+    output_coloring
+        << format("\"task {}, stage {}, rank from {}, rank to {}, color {}\",",
+                  task_id, stage, rank_from, rank_to, color)
+        << '\n';
+  }
+  output_coloring.close();
+
+  cout << '{';
+  for (int i = 0; i < test_ranking.size(); ++i) {
+    auto &task = test_ranking[i];
+    cout << '{';
+    for (int j = 0; j < task.size(); ++j) {
+      auto &leaf = task[j];
+      cout << '{';
+      int cnt = 0;
+      for (int x : leaf) {
+        cnt++;
+        if (cnt != leaf.size())
+          cout << x << ',';
+        else
+          cout << x;
+      }
+      if (j != task.size() - 1) {
+        cout << "},";
+      } else {
+        cout << '}';
+      }
+    }
+    if (i == test_ranking.size() - 1) {
+      cout << "}";
+    } else {
+      cout << "},";
+    }
+  }
+  cout << '}';
+
+  // for (int i = 0; i < test_rankings.size(); ++i) {
+  //   auto &test_ranking = test_rankings[i];
+
+  //   auto [task_res, task_coloring] =
+  //       check_congestionless_ranking(test_ranking, i, func, 10000);
+
+  //   // auto [e1, _] =
+  //   //     count_energy(test_ranking, count_stage_energy_cota_down_to_up);
+  //   // auto [e2, _] = count_energy(test_ranking, count_stage_energy);
+  //   // cout << i << " " << e1 << ' ' << e2 << '\n';
+  // }
+
   // auto [tests, colorings] = read_colored_test(5, 16, 8, "-0.5");
   // for (int i = 1000; i < 1011; ++i) {
   //   write_task_ranking(tests[i]);
