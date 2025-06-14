@@ -658,7 +658,6 @@ void run_all_tests(string stats_filename, auto &resolve_func) {
   file.close();
 }
 int main() {
-  cout << "Pizdec";
 
   thread t1([]() { run_all_tests("new_scenario1.json", run_tests_1); });
   // thread t2([]() { run_all_tests("new_scenario2.json", run_tests_2); });
