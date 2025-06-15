@@ -193,24 +193,18 @@ def generate_tests_alpha(
     tests = set()
 
     for _ in range(test_num):
-        N = sum(task_distribution)
-        diff = 0
-        while leaves * (spines - diff) >= N:
-            diff += 1
-        ranking = generate_test_alpha(
-            tasks, leaves, spines - diff + 1, alpha, task_distribution
-        )
+        ranking = generate_test_alpha(tasks, leaves, spines, alpha, task_distribution)
 
         if not ranking_is_correct(ranking, spines):
             break
         ranking = sorted(ranking, key=lambda x: sum(x))
         ranking = np.asarray(ranking)
         ranking = ranking[:, ranking.sum(axis=0).argsort()]
-        is_colored = ranking_is_colored(tasks, leaves, spines, ranking)
+        # is_colored = ranking_is_colored(tasks, leaves, spines, ranking)
         # tests.add(tuple(map(tuple, ranking)))
         # tests.add(ranking)
 
-        tests.add((tuple([tuple(map(int, row)) for row in ranking]), is_colored))
+        tests.add(tuple([tuple(map(int, row)) for row in ranking]))
     return tests
 
 
@@ -285,24 +279,26 @@ def pool_write_tests(x):
     tests = generate_tests_alpha(
         tasks, leaves, spines, alpha, test_num, task_distribution
     )
-    coloring = [x[1] for x in tests]
-    tests = [x[0] for x in tests]
+    # coloring = [x[1] for x in tests]
+    # tests = [x[0] for x in tests]
     # file_name = f"{tasks}_{leaves}_{spines}"
     file_name = f"{tasks}_{leaves}_{spines}"
     cwd = os.getcwd()
     parent1 = os.path.dirname(cwd)
 
     test_file_dir = os.path.join(
-        parent1, "MCF_spine_leaf", "new_new_multi_tasks_tests", file_name, str(alpha)
+        parent1, "MCF_spine_leaf", "new_single_task_tests", file_name, str(alpha)
     )
     # if not os.path.exists(test_file_dir):
     os.makedirs(test_file_dir, exist_ok=True)
     test_file = os.path.join(test_file_dir, f"test_{file_num}.json")
-    color_file = os.path.join(test_file_dir, f"color_{file_num}.json")
-    with open(test_file, "a") as f:
+    # color_file = os.path.join(test_file_dir, f"color_{file_num}.json")
+    with open(test_file, "w") as f:
+        f.truncate(0)
         json.dump(list(tests), f)
-    with open(color_file, "w") as f:
-        json.dump(coloring, f)
+    # with open(color_file, "w") as f:
+    #     f.truncate(0)
+    #     json.dump(coloring, f)
 
 
 if __name__ == "__main__":
@@ -628,9 +624,27 @@ if __name__ == "__main__":
         # [8, 16, 8, [8, 8, 8, 8, 8, 8, 16, 16], 12],
         # [8, 16, 8, [4, 4, 8, 8, 8, 16, 16, 16], 13],
     ]
+
+    single_task_tests_scenario_1 = [
+        [1, 2, 16, [32], 0],
+        [1, 3, 16, [32], 0],
+        [1, 4, 16, [32], 0],
+        [1, 5, 16, [32], 0],
+        [1, 6, 16, [32], 0],
+        [1, 7, 16, [32], 0],
+        [1, 8, 16, [32], 0],
+        [1, 9, 16, [32], 0],
+        [1, 10, 16, [32], 0],
+        [1, 11, 16, [32], 0],
+        [1, 12, 16, [32], 0],
+        [1, 13, 16, [32], 0],
+        [1, 14, 16, [32], 0],
+        [1, 15, 16, [32], 0],
+        [1, 16, 16, [32], 0],
+    ]
     not_yet_done = []
     args_for_pool = []
-    for t, l, s, task_distr, file_num in new_new_tests:
+    for t, l, s, task_distr, file_num in single_task_tests_scenario_1:
         # task_distribution = get_task_sizes(t, l * s)
         for alpha in alpha_list:
             args_for_pool.append((t, l, s, alpha, 1000, task_distr, file_num))
@@ -648,7 +662,7 @@ if __name__ == "__main__":
         test_file_dir = os.path.join(
             parent1,
             "MCF_spine_leaf",
-            "new_new_multi_tasks_tests",
+            "new_single_task_tests",
             file_name,
             str(alpha),
         )
@@ -661,7 +675,12 @@ if __name__ == "__main__":
     print("NOT DONE ARGUMENTS:")
     for x in not_done_args:
         print(x)
-    print(len(not_done_args), "NOT DONE ARGUMENTS", len(done_args)+len(not_done_args), "TOTAL ARGUMENTS")
+    print(
+        len(not_done_args),
+        "NOT DONE ARGUMENTS",
+        len(done_args) + len(not_done_args),
+        "TOTAL ARGUMENTS",
+    )
     # print("\n\n-----------\n\n")
     # not_done_args = [x for x in not_done_args if x[1] == 16]
     # print(len(not_done_args), "NOT DONE ARGUMENTS:")
@@ -670,5 +689,5 @@ if __name__ == "__main__":
     # for x in done_args:
     #     print(x)
 
-    # with Pool(60) as p:
-    #     p.map(pool_write_tests, not_done_args)
+    with Pool(4) as p:
+        p.map(pool_write_tests, not_done_args)
