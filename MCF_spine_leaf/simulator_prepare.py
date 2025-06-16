@@ -25,7 +25,7 @@ class Test:
         self.communication_colors = communication_colors
         self.final_ranking = final_ranking
         self.result = result
-        self.lower_border = np.log2(max([sum(task) for task in ranking])) + 1
+        self.lower_border = int(np.log2(max([sum(task) for task in ranking]))) + 1
 
 
 def parse_coloring(colors_list):
