@@ -25,6 +25,7 @@ class Test:
         self.communication_colors = communication_colors
         self.final_ranking = final_ranking
         self.result = result
+        self.lower_border = np.log2(max([sum(task) for task in ranking])) + 1
 
 
 def parse_coloring(colors_list):
@@ -187,7 +188,9 @@ if __name__ == "__main__":
     for t, l, s in t_l_s:
         file_name = f"{t}_{l}_{s}"
         output_path = (
-            Path(os.getcwd()) / "new_special_multitests_scenario2_simulator_data" / file_name
+            Path(os.getcwd())
+            / "new_special_multitests_scenario2_simulator_data"
+            / file_name
         )
         if os.path.exists(output_path):
             continue
@@ -202,17 +205,20 @@ if __name__ == "__main__":
         final_rankings = list([test.final_ranking for test in tests])
         colorings = list([get_coloring(test) for test in tests])
         results = list([test.result for test in tests])
+        lower_bound = list([test.lower_border for test in tests])
 
         os.makedirs(output_path, exist_ok=True)
 
         ranking_file = output_path / "rankings.json"
         coloring_file = output_path / "colorings.json"
         result_file = output_path / "results.json"
+        lower_bound_file = output_path / "lower_bound.json"
 
         for file_data, data in [
             (ranking_file, final_rankings),
             (coloring_file, colorings),
             (result_file, results),
+            (lower_bound_file, lower_bound),
         ]:
             print(file_data)
             with open(file_data, "w") as f:
